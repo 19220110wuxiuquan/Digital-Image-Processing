@@ -22,7 +22,7 @@ function varargout = birdimageprocessing(varargin)
 
 % Edit the above text to modify the response to help birdimageprocessing
 
-% Last Modified by GUIDE v2.5 19-Dec-2024 15:50:53
+% Last Modified by GUIDE v2.5 19-Dec-2024 21:25:21
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -228,3 +228,265 @@ function pushbuttonMatch_Callback(hObject, eventdata, handles)
     % 更新handles结构体中的图像数据
     handles.matchedImageData = matched_img;
     guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton5.
+function pushbutton5_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton5 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% 确保有一个打开的图像
+    if ~isfield(handles, 'imageData') || isempty(handles.imageData)
+        warndlg('请先选择一张图像', '无图像');
+        return;
+    end
+    
+    % 获取原始图像数据
+    img = handles.imageData;
+    
+    % 如果图像是彩色的，转换为灰度图像副本进行处理
+    if size(img, 3) > 1
+        gray_img = rgb2gray(img);
+    else
+        gray_img = img; % 如果已经是灰度图像，则直接使用
+    end
+    
+    % 在axes4上显示灰度图像
+    axes(handles.axes4);
+    imshow(gray_img);
+    title('灰度图像');
+    
+    % 更新handles结构体中的图像数据，以便后续操作使用
+    handles.grayImageData = gray_img;
+    guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton6.
+function pushbutton6_Callback(hObject, eventdata, handles)
+    % 确保有一个灰度化的图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = double(handles.grayImageData); % 将图像转换为double类型以进行计算
+    
+    % 定义线性变换参数（这里假设简单增强对比度）
+    alpha = 1.2; % 放大系数
+    beta = -20;  % 偏移量
+    
+    % 应用线性变换
+    linear_transformed_img = alpha * gray_img + beta;
+    
+    % 裁剪超出[0, 255]范围的值
+    linear_transformed_img(linear_transformed_img < 0) = 0;
+    linear_transformed_img(linear_transformed_img > 255) = 255;
+    
+    % 转换回uint8类型
+    linear_transformed_img = uint8(linear_transformed_img);
+    
+    % 在axes5上显示线性变换后的图像
+    axes(handles.axes5);
+    imshow(linear_transformed_img);
+    title('线性变换后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.linearTransformedImageData = linear_transformed_img;
+    guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton7.
+function pushbutton7_Callback(hObject, eventdata, handles)
+    % 确保有一个灰度化的图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = double(handles.grayImageData);
+    
+    % 应用对数变换
+    c = 255 / log(1 + max(gray_img(:))); % 对数变换的常数c
+    log_transformed_img = uint8(c * log(1 + gray_img));
+    
+    % 在axes5上显示对数变换后的图像
+    axes(handles.axes5);
+    imshow(log_transformed_img);
+    title('对数变换后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.logTransformedImageData = log_transformed_img;
+    guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton8.
+function pushbutton8_Callback(hObject, eventdata, handles)
+    % 确保有一个灰度化的图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = double(handles.grayImageData);
+    
+    % 定义指数变换参数
+    gamma = 0.4; % 指数变换的伽马值
+    
+    % 应用指数变换
+    exponential_transformed_img = uint8(255 * ((gray_img / 255).^gamma));
+    
+    % 在axes5上显示指数变换后的图像
+    axes(handles.axes5);
+    imshow(exponential_transformed_img);
+    title('指数变换后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.exponentialTransformedImageData = exponential_transformed_img;
+    guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton9.
+function pushbutton9_Callback(hObject, eventdata, handles)
+    % 确保有一个灰度化的图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = double(handles.grayImageData); % 转换为double类型以便于计算
+    
+    % 提示用户输入缩放比例
+    prompt = {'请输入宽度缩放因子:', '请输入高度缩放因子:'};
+    dlg_title = '输入缩放参数';
+    num_lines = 1;
+    def_input = {'1.5', '1.5'};
+    answer = inputdlg(prompt, dlg_title, num_lines, def_input);
+    
+    if isempty(answer) || any(cellfun(@isempty, answer))
+        return; % 用户取消了对话框或未填写所有字段
+    end
+    
+    scale_factor_x = str2double(answer{1});
+    scale_factor_y = str2double(answer{2});
+    
+    % 输入验证
+    if isnan(scale_factor_x) || isnan(scale_factor_y) || ...
+       scale_factor_x <= 0 || scale_factor_y <= 0
+        warndlg('请输入有效的正数作为缩放因子', '无效输入');
+        return;
+    end
+    
+    % 获取输入图像的尺寸
+    [m, n] = size(gray_img);
+    
+    % 计算放大后的图像尺寸，采用四舍五入
+    new_m = round(m * scale_factor_y);
+    new_n = round(n * scale_factor_x);
+    
+    % 创建一个新的空白图像
+    scaled_img = zeros(new_m, new_n);
+    
+    % 计算每个新像素的值（双线性插值）
+    for i = 1:new_m
+        for j = 1:new_n
+            % 计算在原图像中的坐标
+            x = (j - 0.5) / scale_factor_x - 0.5;
+            y = (i - 0.5) / scale_factor_y - 0.5;
+            
+            % 向上取整和向下取整
+            x1 = floor(x); % 向下
+            x2 = ceil(x);  % 向上
+            y1 = floor(y);
+            y2 = ceil(y);
+            
+            % 确保不超出图像边界
+            x1 = max(1, min(x1, n-1));
+            x2 = max(1, min(x2, n-1));
+            y1 = max(1, min(y1, m-1));
+            y2 = max(1, min(y2, m-1));
+            
+            % 双线性插值计算
+            if x2 == x1 && y2 == y1
+                value = gray_img(y1+1, x1+1);
+            else
+                Q11 = gray_img(y1+1, x1+1);
+                Q21 = gray_img(y2+1, x1+1);
+                Q12 = gray_img(y1+1, x2+1);
+                Q22 = gray_img(y2+1, x2+1);
+                
+                value = (Q11 * (x2-x) * (y2-y) + ...
+                         Q21 * (x-x1) * (y2-y) + ...
+                         Q12 * (x2-x) * (y-y1) + ...
+                         Q22 * (x-x1) * (y-y1));
+            end
+            
+            scaled_img(i, j) = value;
+        end
+    end
+    
+    % 将图像转换回uint8类型
+    scaled_img = uint8(scaled_img);
+    
+    % 在axes5上显示缩放后的图像
+    axes(handles.axes5);
+    cla; % 清除坐标轴以确保新图像正确显示
+    imshow(scaled_img);
+    title(['缩放因子: ', num2str(scale_factor_x), 'x', num2str(scale_factor_y)]);
+    
+    % 更新handles结构体中的图像数据
+    handles.scaledImageData = scaled_img;
+    guidata(hObject, handles);
+
+% --- Executes on button press in pushbutton10.
+function pushbutton10_Callback(hObject, eventdata, handles)
+    % 确保有一个灰度化的图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = handles.grayImageData;
+    
+    % 提示用户输入旋转角度
+    angle = inputdlg('请输入旋转角度（顺时针方向，单位：度）:', '输入旋转角度', 1, {'0'});
+    
+    if isempty(angle)
+        return; % 用户取消了对话框
+    end
+    
+    angle_degrees = str2double(angle{1});
+    
+    if isnan(angle_degrees)
+        warndlg('请输入有效的数字作为旋转角度', '无效输入');
+        return;
+    end
+    
+    % 应用旋转变换
+    rotated_img = imrotate(gray_img, -angle_degrees, 'bilinear', 'crop'); % 使用双线性插值并裁剪图像
+    
+    % 在axes5上显示旋转变换后的图像
+    axes(handles.axes5);
+    imshow(rotated_img);
+    title(['旋转角度: ', num2str(angle_degrees), '度']);
+    
+    % 更新handles结构体中的图像数据
+    handles.rotatedImageData = rotated_img;
+    guidata(hObject, handles);
+
+
+% --- Executes on button press in pushbutton11.
+function pushbutton11_Callback(hObject, eventdata, handles)
+
+
+% --- Executes on button press in pushbutton12.
+function pushbutton12_Callback(hObject, eventdata, handles)
+    
+
+% --- Executes on button press in pushbutton13.
+    function pushbutton13_Callback(hObject, eventdata, handles)
+    
