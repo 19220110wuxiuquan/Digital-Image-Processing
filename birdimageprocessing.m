@@ -22,7 +22,7 @@ function varargout = birdimageprocessing(varargin)
 
 % Edit the above text to modify the response to help birdimageprocessing
 
-% Last Modified by GUIDE v2.5 19-Dec-2024 21:25:21
+% Last Modified by GUIDE v2.5 20-Dec-2024 22:42:42
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -481,12 +481,281 @@ function pushbutton10_Callback(hObject, eventdata, handles)
 
 % --- Executes on button press in pushbutton11.
 function pushbutton11_Callback(hObject, eventdata, handles)
-
+    % 确保有一个打开的灰度图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 使用列表对话框让用户选择噪声类型
+    options = {'椒盐噪声', '高斯噪声', '泊松噪声'};
+    noiseType = listdlg('PromptString', '请选择噪声类型：', ...
+                        'ListString', options, ...
+                        'Name', '噪声类型选择');
+    
+    if isempty(noiseType)
+        return; % 用户取消了对话框
+    end
+    
+    % 根据用户选择添加相应的噪声
+    switch options{noiseType}
+        case '椒盐噪声'
+            noisy_img = imnoise(gray_img, 'salt & pepper', 0.05);
+        case '高斯噪声'
+            noisy_img = imnoise(gray_img, 'gaussian', 0, 0.01);
+        case '泊松噪声'
+            noisy_img = imnoise(gray_img, 'poisson');
+        otherwise
+            error('未知的噪声类型');
+    end
+    
+    % 显示加噪后的图像
+    axes(handles.axes5);
+    imshow(noisy_img);
+    title('加噪后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.noisyImageData = noisy_img;
+    guidata(hObject, handles);
 
 % --- Executes on button press in pushbutton12.
 function pushbutton12_Callback(hObject, eventdata, handles)
+    % 确保有一个加噪后的图像
+    if ~isfield(handles, 'noisyImageData') || isempty(handles.noisyImageData)
+        warndlg('请先添加噪声', '无噪声图像');
+        return;
+    end
+    
+    % 获取加噪后的图像数据
+    noisy_img = handles.noisyImageData;
+    
+    % 使用列表对话框让用户选择滤波器类型
+    options = {'均值滤波', '高斯滤波', '中值滤波', '双边滤波', '自定义滤波'};
+    filterType = listdlg('PromptString', '请选择空域滤波器类型：', ...
+                         'ListString', options, ...
+                         'Name', '空域滤波器类型选择');
+    
+    if isempty(filterType)
+        return; % 用户取消了对话框
+    end
+    
+    filtered_img = [];
+    
+    % 应用所选的空域滤波器
+    switch options{filterType}
+        case '均值滤波'
+            h = fspecial('average', [3 3]);
+            filtered_img = imfilter(noisy_img, h);
+        case '高斯滤波'
+            h = fspecial('gaussian', [3 3], 0.5);
+            filtered_img = imfilter(noisy_img, h);
+        case '中值滤波'
+            filtered_img = medfilt2(noisy_img);
+        case '双边滤波'
+            filtered_img = imgaussfilt(noisy_img, 2); % 双边滤波器的一个近似
+        case '自定义滤波'
+            prompt = {'请输入滤波器尺寸:', '请输入标准差:'};
+            dlg_title = '自定义高斯滤波器参数';
+            num_lines = 1;
+            def_input = {'5', '1'};
+            answer = inputdlg(prompt, dlg_title, num_lines, def_input);
+            
+            if isempty(answer) || any(cellfun(@isempty, answer))
+                return; % 用户取消了对话框或未填写所有字段
+            end
+            
+            size_val = str2double(answer{1});
+            sigma_val = str2double(answer{2});
+            
+            if isnan(size_val) || isnan(sigma_val) || size_val <= 0 || sigma_val <= 0
+                warndlg('请输入有效的正数作为滤波器尺寸和标准差', '无效输入');
+                return;
+            end
+            
+            h = fspecial('gaussian', [size_val size_val], sigma_val);
+            filtered_img = imfilter(noisy_img, h);
+        otherwise
+            error('未知的滤波器类型');
+    end
+    
+    % 显示滤波后的图像
+    axes(handles.axes6);
+    imshow(filtered_img);
+    title('空域滤波后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.filteredSpatialData = filtered_img;
+    guidata(hObject, handles);
+    
+% --- Executes on button press in pushbutton13.
+function pushbutton13_Callback(hObject, eventdata, handles)
+    % 确保有一个加噪后的图像
+    if ~isfield(handles, 'noisyImageData') || isempty(handles.noisyImageData)
+        warndlg('请先添加噪声', '无噪声图像');
+        return;
+    end
+    
+    % 获取加噪后的图像数据
+    noisy_img = im2double(handles.noisyImageData);
+    
+    % 计算图像的二维快速傅里叶变换
+    F = fftshift(fft2(noisy_img));
+    
+    % 使用列表对话框让用户选择频域滤波器类型
+    options = {'理想低通滤波', '巴特沃斯低通滤波', '高斯低通滤波'};
+    filterType = listdlg('PromptString', '请选择频域滤波器类型：', ...
+                         'ListString', options, ...
+                         'Name', '频域滤波器类型选择');
+    
+    if isempty(filterType)
+        return; % 用户取消了对话框
+    end
+    
+    % 创建并应用所选的频域滤波器
+    [M, N] = size(F);
+    [U, V] = meshgrid(-fix(N/2):ceil(N/2)-1, -fix(M/2):ceil(M/2)-1);
+    D = sqrt(U.^2 + V.^2);
+    cutoffFreq = 30; % 截止频率
+    
+    switch options{filterType}
+        case '理想低通滤波'
+            H = double(D <= cutoffFreq);
+        case '巴特沃斯低通滤波'
+            n = 2; % 滤波器阶数
+            H = 1 ./ (1 + (D / cutoffFreq).^(2*n));
+        case '高斯低通滤波'
+            H = exp(-(D.^2) / (2 * cutoffFreq^2));
+        otherwise
+            error('未知的频域滤波器类型');
+    end
+    
+    % 应用滤波器
+    G = F .* H;
+    
+    % 逆傅里叶变换回到空间域
+    filtered_img = real(ifft2(ifftshift(G)));
+    
+    % 显示滤波后的图像
+    axes(handles.axes6);
+    imshow(filtered_img, []);
+    title('频域滤波后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.filteredFrequencyData = filtered_img;
+    guidata(hObject, handles);
     
 
-% --- Executes on button press in pushbutton13.
-    function pushbutton13_Callback(hObject, eventdata, handles)
+
+% --- Executes on button press in pushbutton14.
+function pushbutton14_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton14 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
     
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 定义Roberts算子卷积核
+    robertsKernelX = [-1 0; 0 1];
+    robertsKernelY = [0 -1; 1 0];
+    
+    % 应用Roberts算子
+    g1 = imfilter(gray_img, robertsKernelX, 'replicate');
+    g2 = imfilter(gray_img, robertsKernelY, 'replicate');
+    edge_img = sqrt(g1.^2 + g2.^2);
+    
+    % 显示边缘检测后的图像
+    axes(handles.axes6);
+    imshow(edge_img, []);
+    title('Roberts算子边缘检测后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.edgeDetectedImageData = edge_img;
+    guidata(hObject, handles);
+
+% --- Executes on button press in pushbutton15.
+function pushbutton15_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton15 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% 确保有一个打开的灰度图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 使用MATLAB内置函数进行Prewitt边缘检测
+    edge_img = edge(gray_img, 'prewitt');
+    
+    % 显示边缘检测后的图像
+    axes(handles.axes6);
+    imshow(edge_img);
+    title('Prewitt算子边缘检测后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.edgeDetectedImageData = edge_img;
+    guidata(hObject, handles);
+
+% --- Executes on button press in pushbutton16.
+function pushbutton16_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton16 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% 确保有一个打开的灰度图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 使用MATLAB内置函数进行Sobel边缘检测
+    edge_img = edge(gray_img, 'sobel');
+    
+    % 显示边缘检测后的图像
+    axes(handles.axes6);
+    imshow(edge_img);
+    title('Sobel算子边缘检测后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.edgeDetectedImageData = edge_img;
+    guidata(hObject, handles);
+
+% --- Executes on button press in pushbutton17.
+function pushbutton17_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton17 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+ % 确保有一个打开的灰度图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 使用MATLAB内置函数进行拉普拉斯边缘检测
+    laplacianKernel = fspecial('laplacian', 0); % 创建拉普拉斯算子内核
+    edge_img = imfilter(gray_img, laplacianKernel); % 应用拉普拉斯算子
+    edge_img = edge_img > mean(edge_img(:)); % 二值化
+    
+    % 显示边缘检测后的图像
+    axes(handles.axes6);
+    imshow(edge_img);
+    title('拉普拉斯算子边缘检测后的图像');
+    
+    % 更新handles结构体中的图像数据
+    handles.edgeDetectedImageData = edge_img;
+    guidata(hObject, handles);
