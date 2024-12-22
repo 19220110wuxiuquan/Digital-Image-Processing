@@ -22,7 +22,7 @@ function varargout = birdimageprocessing(varargin)
 
 % Edit the above text to modify the response to help birdimageprocessing
 
-% Last Modified by GUIDE v2.5 20-Dec-2024 23:22:22
+% Last Modified by GUIDE v2.5 22-Dec-2024 20:40:16
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -363,7 +363,7 @@ function pushbutton9_Callback(hObject, eventdata, handles)
     prompt = {'请输入宽度缩放因子:', '请输入高度缩放因子:'};
     dlg_title = '输入缩放参数';
     num_lines = 1;
-    def_input = {'1.5', '1.5'};
+    def_input = {'2', '1.5'};
     answer = inputdlg(prompt, dlg_title, num_lines, def_input);
     
     if isempty(answer) || any(cellfun(@isempty, answer))
@@ -500,26 +500,79 @@ function pushbutton11_Callback(hObject, eventdata, handles)
         return; % 用户取消了对话框
     end
     
-    % 根据用户选择添加相应的噪声
+    % 定义每个噪声类型的参数和默认值
     switch options{noiseType}
         case '椒盐噪声'
-            noisy_img = imnoise(gray_img, 'salt & pepper', 0.05);
+            prompt = {'请输入密度 (0-1)：'};
+            dlgtitle = '椒盐噪声参数';
+            definput = {'0.05'};
+            rangeHint = '密度范围为0到1之间';
+            
         case '高斯噪声'
-            noisy_img = imnoise(gray_img, 'gaussian', 0, 0.01);
+            prompt = {'请输入均值：', '请输入方差 (0-1)：'};
+            dlgtitle = '高斯噪声参数';
+            definput = {'0', '0.01'};
+            rangeHint = '均值可以是任意实数，方差范围为0到1之间';
+            
         case '泊松噪声'
+            % 泊松噪声没有额外参数
             noisy_img = imnoise(gray_img, 'poisson');
+            % 移除 break 语句
+            
         otherwise
             error('未知的噪声类型');
+    end
+
+    % 如果不是泊松噪声，则获取用户输入的参数
+    if ~strcmp(options{noiseType}, '泊松噪声')
+        userInputs = inputdlg(prompt, dlgtitle, 1, definput);
+        if isempty(userInputs)
+            return; % 用户取消了对话框
+        end
+        
+        % 将输入转换为数值并应用噪声
+        params = cellfun(@str2double, userInputs, 'UniformOutput', false);
+        if any(cellfun(@isnan, params))
+            warndlg('请输入有效的数字参数', '无效输入');
+            return;
+        end
+        
+        try
+            switch options{noiseType}
+                case '椒盐噪声'
+                    density = params{1};
+                    if density < 0 || density > 1
+                        warndlg('密度应在0到1之间', '参数超出范围');
+                        return;
+                    end
+                    noisy_img = imnoise(gray_img, 'salt & pepper', density);
+                    
+                case '高斯噪声'
+                    mean_val = params{1};
+                    variance = params{2};
+                    if variance < 0 || variance > 1
+                        warndlg('方差应在0到1之间', '参数超出范围');
+                        return;
+                    end
+                    noisy_img = imnoise(gray_img, 'gaussian', mean_val, variance);
+            end
+        catch ME
+            warndlg(['发生错误: ' ME.message], '添加噪声失败');
+            return;
+        end
     end
     
     % 显示加噪后的图像
     axes(handles.axes5);
     imshow(noisy_img);
-    title('加噪后的图像');
+    title(['加噪后的图像 (' options{noiseType} ')']);
     
     % 更新handles结构体中的图像数据
     handles.noisyImageData = noisy_img;
     guidata(hObject, handles);
+
+    % 提示参数范围
+    msgbox(rangeHint, '参数范围提示');
 
 % --- Executes on button press in pushbutton12.
 function pushbutton12_Callback(hObject, eventdata, handles)
@@ -760,211 +813,217 @@ function pushbutton17_Callback(hObject, eventdata, handles)
     handles.edgeDetectedImageData = edge_img;
     guidata(hObject, handles);
 
-% --- Executes on button press in pushbutton19.
-function pushbutton19_Callback(hObject, eventdata, handles)
-% 确保有一个打开的灰度图像和原始彩色图像
-    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData) || ...
-       ~isfield(handles, 'imageData') || isempty(handles.imageData)
-        warndlg('请先选择一张图像并将其灰度化', '无图像');
+% --- Executes on button press in pushbutton18.
+function pushbutton18_Callback(hObject, eventdata, handles)
+% hObject    handle to pushbutton18 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+ [filename, pathname] = uigetfile({'*.jpg;*.jpeg;*.png;*.bmp','All Image Files'; ...
+                                      '*.*','All Files'}, 'Select a Background Image');
+    
+    if isequal(filename, 0) || isequal(pathname, 0)
+        % 用户取消了文件选择
         return;
     end
     
-    % 获取灰度图像数据和原始彩色图像数据
-    gray_img = handles.grayImageData;
-    original_img = handles.imageData;
+    % 构建完整的文件路径
+    fullpath = fullfile(pathname, filename);
     
-    % 图像预处理：去噪
-    smoothed_img = imgaussfilt(gray_img, 2); % 高斯滤波去噪
+    % 读取背景图像
+    background_img = imread(fullpath);
     
-    % 使用Otsu法计算最优阈值并二值化图像
-    level = graythresh(smoothed_img);
-    binary_img = imbinarize(smoothed_img, level);
+    % 将背景图像存储到handles结构体中
+    handles.backgroundImage = background_img;
+    guidata(hObject, handles); % 更新handles结构体
     
-    % 应用形态学操作：闭运算以填充孔洞并连接断开的目标部分
-    se = strel('disk', 5); % 定义结构元素
-    closed_img = imclose(binary_img, se); % 闭运算
+    % 显示背景图像名
+    set(handles.edit2, 'String', filename);
     
-    % 查找连通区域并标记
-    labeled_img = bwlabel(closed_img);
-    stats = regionprops(labeled_img, 'Area', 'BoundingBox', 'Centroid');
-    
-    % 过滤掉小面积的对象（假设目标是较大的对象）
-    min_object_area = 500; % 根据实际情况调整最小面积阈值
-    large_objects = [];
-    for i = 1:length(stats)
-        if stats(i).Area > min_object_area
-            bbox = stats(i).BoundingBox;
-            large_objects = [large_objects; bbox];
-        end
+    % 在axes3中显示背景图像
+    axes(handles.axes3);
+    imshow(background_img);
+    title('背景图像');
+
+function edit2_Callback(hObject, eventdata, handles)
+% hObject    handle to edit2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of edit2 as text
+%        str2double(get(hObject,'String')) returns contents of edit2 as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function edit2_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to edit2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes on button press in pushbutton19.
+    function pushbutton19_Callback(hObject, eventdata, handles)
+     % 检查是否已经加载了原图和背景图
+    if ~isfield(handles, 'imageData') || isempty(handles.imageData) || ...
+       ~isfield(handles, 'backgroundImage') || isempty(handles.backgroundImage)
+        warndlg('请先加载原图和背景图', '缺少图像');
+        return;
     end
-    
-    % 显示提取的目标在原始彩色图像上
-    axes(handles.axes7); % 假设axes7用于显示提取的目标
-    imshow(original_img); % 显示原始彩色图像作为背景
-    hold on;
-    for i = 1:size(large_objects, 1)
-        rectangle('Position', large_objects(i,:), 'EdgeColor', 'r', 'LineWidth', 2);
+
+    % 将图像转换为double类型
+    original_img = im2double(handles.imageData);
+    background_img = im2double(handles.backgroundImage);
+
+    % 确保背景图像是灰度图像
+    if size(background_img, 3) == 3
+        backgroundGray = rgb2gray(background_img); % 转换为灰度图像
+    else
+        backgroundGray = background_img; % 如果已经是灰度图像，则直接使用
     end
-    title('Otsu法提取的目标');
-    hold off;
-    
-    % 更新handles结构体中的提取目标数据
-    handles.extractedObjects = large_objects;
+
+    % 将背景图像调整到与原图相同的大小
+    if ~isequal(size(original_img(:,:,1)), size(backgroundGray))
+        backgroundGray = imresize(backgroundGray, size(original_img(:,:,1)));
+    end
+
+    % 将背景灰度图像归一化到[0, 1]范围，以便作为掩码使用
+    backgroundMask = mat2gray(backgroundGray);
+
+    % 使用掩码从原图中提取目标区域（图像乘法）
+    if size(original_img, 3) == 3 % 如果是RGB图像
+        targetImage = bsxfun(@times, original_img, cast(backgroundMask, class(original_img))); % 应用掩码到每个颜色通道并保持原始图像的数据类型
+    else % 如果是灰度图像
+        targetImage = bsxfun(@times, original_img, cast(backgroundMask, class(original_img))); % 应用掩码到灰度图像并保持原始图像的数据类型
+    end
+
+    % 显示结果
+    axes(handles.axes7);
+    imshow(targetImage);
+    title('提取的目标区域');
+
+    % 更新handles结构体中的目标数据
+    handles.targetImage = targetImage;
     guidata(hObject, handles);
 
 
-% --- Executes on button press in pushbutton20.
+
+function lbp_img = computeLBPImage(gray_img)
+    % 默认参数：半径为1，邻居点数为8（3x3邻域）
+    radius = 1;
+    neighbors = 8;
+
+    % 获取图像尺寸
+    [rows, cols] = size(gray_img);
+
+    % 初始化LBP图像，填充NaN以处理边界情况
+    lbp_img = NaN(rows, cols);
+
+    % 遍历图像中的每个像素（除了边界）
+    for i = radius + 1:rows - radius
+        for j = radius + 1:cols - radius
+            centerPixel = gray_img(i, j);
+            code = 0;
+            for n = 0:(neighbors-1)
+                % 计算邻居的位置
+                theta = 2 * pi / neighbors * n;
+                x = i + round(radius * cos(theta));
+                y = j - round(radius * sin(theta));
+
+                % 比较中心像素与邻居像素
+                if gray_img(x, y) >= centerPixel
+                    code = bitset(code, neighbors - n);
+                end
+            end
+            lbp_img(i, j) = code;
+        end
+    end
+
+    % 处理边界（可选），这里简单地用0填充
+    lbp_img(isnan(lbp_img)) = 0;
+
+function hist = computeLBPHistogram(lbp_img)
+    % 将LBP图像转换为线性索引并计算直方图
+    bins = 2^8; % 假设我们有8个邻居，所以有256个可能的LBP值
+    hist = histcounts(double(lbp_img(:)), 0:bins);
+
+    % 归一化直方图
+    hist = hist / sum(hist);
+
+
 function pushbutton20_Callback(hObject, eventdata, handles)
+    % 检查是否有灰度图像
     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
         return;
     end
     
-    % 获取灰度图像数据
     gray_img = im2double(handles.grayImageData);
     
-    % 提取LBP特征
-    lbp_features = extractLBPFeatures(gray_img);
+    % 提取并显示LBP特征图像
+    lbp_img = computeLBPImage(gray_img); % 假设有一个computeLBPImage函数来生成LBP图像
     
-    % 显示原始图像
-    axes(handles.axes8); % 使用指定的显示组件
-    imshow(gray_img);
-    title('LBP特征 (原始图像)');
+    axes(handles.axes8); 
+    imshow(lbp_img, []);
+    title('原始图像的LBP特征');
     
     % 打印LBP特征信息
     disp('原始图像的LBP特征:');
-    disp(lbp_features);
+    disp(computeLBPHistogram(lbp_img)); % 假设有一个函数来计算LBP直方图作为特征
     
     % 更新handles结构体中的特征数据
-    handles.lbpFeaturesOriginal = lbp_features;
+    handles.lbpFeaturesOriginal = computeLBPHistogram(lbp_img);
     guidata(hObject, handles);
 
-
-% --- Executes on button press in pushbutton21.
 function pushbutton21_Callback(hObject, eventdata, handles)
-    if ~isfield(handles, 'extractedObjects') || isempty(handles.extractedObjects) || ...
-       ~isfield(handles, 'imageData') || isempty(handles.imageData)
+    % 检查是否有目标区域图像
+    if ~isfield(handles, 'targetImage') || isempty(handles.targetImage)
         warndlg('请先提取目标区域', '无目标区域');
         return;
     end
     
-    % 获取灰度图像数据
-    gray_img = im2double(handles.grayImageData);
+    target_gray_img = rgb2gray(im2double(handles.targetImage));
     
-    % 提取目标区域
-    target_mask = false(size(gray_img));
-    for i = 1:size(handles.extractedObjects, 1)
-        bbox = round(handles.extractedObjects(i,:));
-        target_mask(bbox(2):bbox(2)+bbox(4)-1, bbox(1):bbox(1)+bbox(3)-1) = true;
-    end
+    % 提取并显示目标区域的LBP特征图像
+    lbp_img_target = computeLBPImage(target_gray_img);
     
-    % 应用掩码获取目标区域的灰度图像
-    target_gray_img = gray_img .* double(target_mask);
-    
-    % 提取LBP特征
-    lbp_features = extractLBPFeatures(target_gray_img);
-    
-    % 显示目标区域的LBP特征
-    axes(handles.axes8); % 使用指定的显示组件
-    imshow(target_gray_img);
-    title('目标区域 (LBP特征)');
+    axes(handles.axes8); 
+    imshow(lbp_img_target, []);
+    title('目标区域的LBP特征');
     
     % 打印LBP特征信息
     disp('目标区域的LBP特征:');
-    disp(lbp_features);
+    disp(computeLBPHistogram(lbp_img_target));
     
     % 更新handles结构体中的特征数据
-    handles.lbpFeaturesTarget = lbp_features;
+    handles.lbpFeaturesTarget = computeLBPHistogram(lbp_img_target);
     guidata(hObject, handles);
-
-
+    
 % --- Executes on button press in pushbutton22.
 function pushbutton22_Callback(hObject, eventdata, handles)
-     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
         return;
     end
     
-    % 获取灰度图像数据
     gray_img = im2double(handles.grayImageData);
     
-    % 直接在这里实现HOG特征提取逻辑
-    img = double(gray_img);
-    [h, w] = size(img);
-    img = sqrt(img); % 伽马校正
-
-    fy = [-1 0 1]; % 定义竖直模板
-    fx = fy'; % 定义水平模板
-    Iy = imfilter(img, fy, 'replicate'); % 竖直边缘
-    Ix = imfilter(img, fx, 'replicate'); % 水平边缘
-    Ied = sqrt(Ix.^2 + Iy.^2); % 边缘强度
-    Iphase = Iy ./ Ix;
-
-    step = 16; % step*step个像素作为一个单元
-    orient = 9; % 方向直方图的方向个数
-    jiao = 360 / orient; % 每个方向包含的角度数
-    Cell = cell(1, 1);
-    ii = 1;
-    jj = 1;
-    for i = 1:step:h - step + 1
-        ii = 1;
-        for j = 1:step:w - step + 1
-            tmpx = Ix(i:i + step - 1, j:j + step - 1);
-            tmped = Ied(i:i + step - 1, j:j + step - 1);
-            tmped = tmped / sum(sum(tmped)); % 局部边缘强度归一化
-            tmpphase = Iphase(i:i + step - 1, j:j + step - 1);
-            Hist = zeros(1, orient);
-            for p = 1:step
-                for q = 1:step
-                    if isnan(tmpphase(p, q)) % 0/0会得到nan，如果像素是nan，重设为0
-                        tmpphase(p, q) = 0;
-                    end
-                    ang = atan(tmpphase(p, q));
-                    ang = mod(ang * 180 / pi, 360); % 全部变正，-90变270
-                    if tmpx(p, q) < 0
-                        if ang < 90 % 如果是第一象限
-                            ang = ang + 180; % 移到第三象限
-                        end
-                        if ang > 270 % 如果是第四象限
-                            ang = ang - 180; % 移到第二象限
-                        end
-                    end
-                    ang = ang + 0.0000001;
-                    Hist(ceil(ang / jiao)) = Hist(ceil(ang / jiao)) + tmped(p, q); % 使用边缘强度加权
-                end
-            end
-            Hist = Hist / sum(Hist); % 方向直方图归一化
-            Cell{ii, jj} = Hist;
-            ii = ii + 1;
-        end
-        jj = jj + 1;
-    end
-
-    [m, n] = size(Cell);
-    feature = cell(1, (m - 1) * (n - 1));
-    for i = 1:m - 1
-        for j = 1:n - 1
-            f = [];
-            f = [f Cell{i, j}(:)' Cell{i, j + 1}(:)' Cell{i + 1, j}(:)' Cell{i + 1, j + 1}(:)'];
-            feature{(i - 1) * (n - 1) + j} = f;
-        end
-    end
-
-    l = length(feature);
-    hog_features = [];
-    for i = 1:l
-        hog_features = [hog_features; feature{i}(:)'];
-    end
+    % 使用原始的HOG特征提取逻辑
+    hog_features = extractHOGFeaturesManual(gray_img);
     
     % 显示原始图像
-    axes(handles.axes8); % 使用指定的显示组件
+    axes(handles.axes8); 
     imshow(gray_img);
     title('原始图像');
     
     % 创建一个新的figure窗口来展示HOG特征的mesh图
     figure;
     mesh(hog_features);
-    title('HOG特征 (mesh)');
+    title('原始图像的HOG特征');
     xlabel('Block Index');
     ylabel('Feature Vector Elements');
     zlabel('Magnitude');
@@ -979,27 +1038,39 @@ function pushbutton22_Callback(hObject, eventdata, handles)
 
 % --- Executes on button press in pushbutton23.
 function pushbutton23_Callback(hObject, eventdata, handles)
-  if ~isfield(handles, 'extractedObjects') || isempty(handles.extractedObjects) || ...
-       ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+    if ~isfield(handles, 'targetImage') || isempty(handles.targetImage)
         warndlg('请先提取目标区域', '无目标区域');
         return;
     end
     
-    % 获取灰度图像数据
-    gray_img = im2double(handles.grayImageData);
+    target_gray_img = rgb2gray(im2double(handles.targetImage)); % 假设targetImage可能是RGB
     
-    % 提取目标区域
-    target_mask = false(size(gray_img));
-    for i = 1:size(handles.extractedObjects, 1)
-        bbox = round(handles.extractedObjects(i, :));
-        target_mask(bbox(2):bbox(2)+bbox(4)-1, bbox(1):bbox(1)+bbox(3)-1) = true;
-    end
+    % 使用原始的HOG特征提取逻辑
+    hog_features = extractHOGFeaturesManual(target_gray_img);
     
-    % 应用掩码获取目标区域的灰度图像
-    target_gray_img = gray_img .* double(target_mask);
+    % 显示目标区域的灰度图像
+    axes(handles.axes8); 
+    imshow(target_gray_img);
+    title('目标区域 (灰度图像)');
     
-    % 直接在这里实现HOG特征提取逻辑
-    img = double(target_gray_img);
+    % 创建一个新的figure窗口来展示HOG特征的mesh图
+    figure;
+    mesh(hog_features);
+    title('目标区域的HOG特征');
+    xlabel('Block Index');
+    ylabel('Feature Vector Elements');
+    zlabel('Magnitude');
+    
+    % 打印HOG特征信息
+    disp('目标区域的HOG特征:');
+    disp(hog_features);
+    
+    % 更新handles结构体中的特征数据
+    handles.hogFeaturesTarget = hog_features;
+    guidata(hObject, handles);
+
+% 辅助函数：手动实现的HOG特征提取逻辑（保持原有逻辑不变）
+function hog_features = extractHOGFeaturesManual(img)
     [h, w] = size(img);
     img = sqrt(img); % 伽马校正
 
@@ -1065,24 +1136,3 @@ function pushbutton23_Callback(hObject, eventdata, handles)
     for i = 1:l
         hog_features = [hog_features; feature{i}(:)'];
     end
-    
-    % 显示目标区域的灰度图像
-    axes(handles.axes8); % 使用指定的显示组件
-    imshow(target_gray_img);
-    title('目标区域 (灰度图像)');
-    
-    % 创建一个新的figure窗口来展示HOG特征的mesh图
-    figure;
-    mesh(hog_features);
-    title('目标区域 (HOG特征)');
-    xlabel('Block Index');
-    ylabel('Feature Vector Elements');
-    zlabel('Magnitude');
-    
-    % 打印HOG特征信息
-    disp('目标区域的HOG特征:');
-    disp(hog_features);
-    
-    % 更新handles结构体中的特征数据
-    handles.hogFeaturesTarget = hog_features;
-    guidata(hObject, handles);
