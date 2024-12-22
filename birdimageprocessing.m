@@ -760,67 +760,329 @@ function pushbutton17_Callback(hObject, eventdata, handles)
     handles.edgeDetectedImageData = edge_img;
     guidata(hObject, handles);
 
-
-% --- Executes on button press in pushbutton18.
-function pushbutton18_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton18 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-
-
-function edit2_Callback(hObject, eventdata, handles)
-% hObject    handle to edit2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of edit2 as text
-%        str2double(get(hObject,'String')) returns contents of edit2 as a double
-
-
-% --- Executes during object creation, after setting all properties.
-function edit2_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to edit2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-
-
 % --- Executes on button press in pushbutton19.
 function pushbutton19_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton19 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+% 确保有一个打开的灰度图像和原始彩色图像
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData) || ...
+       ~isfield(handles, 'imageData') || isempty(handles.imageData)
+        warndlg('请先选择一张图像并将其灰度化', '无图像');
+        return;
+    end
+    
+    % 获取灰度图像数据和原始彩色图像数据
+    gray_img = handles.grayImageData;
+    original_img = handles.imageData;
+    
+    % 图像预处理：去噪
+    smoothed_img = imgaussfilt(gray_img, 2); % 高斯滤波去噪
+    
+    % 使用Otsu法计算最优阈值并二值化图像
+    level = graythresh(smoothed_img);
+    binary_img = imbinarize(smoothed_img, level);
+    
+    % 应用形态学操作：闭运算以填充孔洞并连接断开的目标部分
+    se = strel('disk', 5); % 定义结构元素
+    closed_img = imclose(binary_img, se); % 闭运算
+    
+    % 查找连通区域并标记
+    labeled_img = bwlabel(closed_img);
+    stats = regionprops(labeled_img, 'Area', 'BoundingBox', 'Centroid');
+    
+    % 过滤掉小面积的对象（假设目标是较大的对象）
+    min_object_area = 500; % 根据实际情况调整最小面积阈值
+    large_objects = [];
+    for i = 1:length(stats)
+        if stats(i).Area > min_object_area
+            bbox = stats(i).BoundingBox;
+            large_objects = [large_objects; bbox];
+        end
+    end
+    
+    % 显示提取的目标在原始彩色图像上
+    axes(handles.axes7); % 假设axes7用于显示提取的目标
+    imshow(original_img); % 显示原始彩色图像作为背景
+    hold on;
+    for i = 1:size(large_objects, 1)
+        rectangle('Position', large_objects(i,:), 'EdgeColor', 'r', 'LineWidth', 2);
+    end
+    title('Otsu法提取的目标');
+    hold off;
+    
+    % 更新handles结构体中的提取目标数据
+    handles.extractedObjects = large_objects;
+    guidata(hObject, handles);
 
 
 % --- Executes on button press in pushbutton20.
 function pushbutton20_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton20 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 提取LBP特征
+    lbp_features = extractLBPFeatures(gray_img);
+    
+    % 显示原始图像
+    axes(handles.axes8); % 使用指定的显示组件
+    imshow(gray_img);
+    title('LBP特征 (原始图像)');
+    
+    % 打印LBP特征信息
+    disp('原始图像的LBP特征:');
+    disp(lbp_features);
+    
+    % 更新handles结构体中的特征数据
+    handles.lbpFeaturesOriginal = lbp_features;
+    guidata(hObject, handles);
 
 
 % --- Executes on button press in pushbutton21.
 function pushbutton21_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton21 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+    if ~isfield(handles, 'extractedObjects') || isempty(handles.extractedObjects) || ...
+       ~isfield(handles, 'imageData') || isempty(handles.imageData)
+        warndlg('请先提取目标区域', '无目标区域');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 提取目标区域
+    target_mask = false(size(gray_img));
+    for i = 1:size(handles.extractedObjects, 1)
+        bbox = round(handles.extractedObjects(i,:));
+        target_mask(bbox(2):bbox(2)+bbox(4)-1, bbox(1):bbox(1)+bbox(3)-1) = true;
+    end
+    
+    % 应用掩码获取目标区域的灰度图像
+    target_gray_img = gray_img .* double(target_mask);
+    
+    % 提取LBP特征
+    lbp_features = extractLBPFeatures(target_gray_img);
+    
+    % 显示目标区域的LBP特征
+    axes(handles.axes8); % 使用指定的显示组件
+    imshow(target_gray_img);
+    title('目标区域 (LBP特征)');
+    
+    % 打印LBP特征信息
+    disp('目标区域的LBP特征:');
+    disp(lbp_features);
+    
+    % 更新handles结构体中的特征数据
+    handles.lbpFeaturesTarget = lbp_features;
+    guidata(hObject, handles);
 
 
 % --- Executes on button press in pushbutton22.
 function pushbutton22_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton22 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先将图像灰度化', '无灰度图像');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 直接在这里实现HOG特征提取逻辑
+    img = double(gray_img);
+    [h, w] = size(img);
+    img = sqrt(img); % 伽马校正
 
+    fy = [-1 0 1]; % 定义竖直模板
+    fx = fy'; % 定义水平模板
+    Iy = imfilter(img, fy, 'replicate'); % 竖直边缘
+    Ix = imfilter(img, fx, 'replicate'); % 水平边缘
+    Ied = sqrt(Ix.^2 + Iy.^2); % 边缘强度
+    Iphase = Iy ./ Ix;
+
+    step = 16; % step*step个像素作为一个单元
+    orient = 9; % 方向直方图的方向个数
+    jiao = 360 / orient; % 每个方向包含的角度数
+    Cell = cell(1, 1);
+    ii = 1;
+    jj = 1;
+    for i = 1:step:h - step + 1
+        ii = 1;
+        for j = 1:step:w - step + 1
+            tmpx = Ix(i:i + step - 1, j:j + step - 1);
+            tmped = Ied(i:i + step - 1, j:j + step - 1);
+            tmped = tmped / sum(sum(tmped)); % 局部边缘强度归一化
+            tmpphase = Iphase(i:i + step - 1, j:j + step - 1);
+            Hist = zeros(1, orient);
+            for p = 1:step
+                for q = 1:step
+                    if isnan(tmpphase(p, q)) % 0/0会得到nan，如果像素是nan，重设为0
+                        tmpphase(p, q) = 0;
+                    end
+                    ang = atan(tmpphase(p, q));
+                    ang = mod(ang * 180 / pi, 360); % 全部变正，-90变270
+                    if tmpx(p, q) < 0
+                        if ang < 90 % 如果是第一象限
+                            ang = ang + 180; % 移到第三象限
+                        end
+                        if ang > 270 % 如果是第四象限
+                            ang = ang - 180; % 移到第二象限
+                        end
+                    end
+                    ang = ang + 0.0000001;
+                    Hist(ceil(ang / jiao)) = Hist(ceil(ang / jiao)) + tmped(p, q); % 使用边缘强度加权
+                end
+            end
+            Hist = Hist / sum(Hist); % 方向直方图归一化
+            Cell{ii, jj} = Hist;
+            ii = ii + 1;
+        end
+        jj = jj + 1;
+    end
+
+    [m, n] = size(Cell);
+    feature = cell(1, (m - 1) * (n - 1));
+    for i = 1:m - 1
+        for j = 1:n - 1
+            f = [];
+            f = [f Cell{i, j}(:)' Cell{i, j + 1}(:)' Cell{i + 1, j}(:)' Cell{i + 1, j + 1}(:)'];
+            feature{(i - 1) * (n - 1) + j} = f;
+        end
+    end
+
+    l = length(feature);
+    hog_features = [];
+    for i = 1:l
+        hog_features = [hog_features; feature{i}(:)'];
+    end
+    
+    % 显示原始图像
+    axes(handles.axes8); % 使用指定的显示组件
+    imshow(gray_img);
+    title('原始图像');
+    
+    % 创建一个新的figure窗口来展示HOG特征的mesh图
+    figure;
+    mesh(hog_features);
+    title('HOG特征 (mesh)');
+    xlabel('Block Index');
+    ylabel('Feature Vector Elements');
+    zlabel('Magnitude');
+    
+    % 打印HOG特征信息
+    disp('原始图像的HOG特征:');
+    disp(hog_features);
+    
+    % 更新handles结构体中的特征数据
+    handles.hogFeaturesOriginal = hog_features;
+    guidata(hObject, handles);
 
 % --- Executes on button press in pushbutton23.
 function pushbutton23_Callback(hObject, eventdata, handles)
-% hObject    handle to pushbutton23 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+  if ~isfield(handles, 'extractedObjects') || isempty(handles.extractedObjects) || ...
+       ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+        warndlg('请先提取目标区域', '无目标区域');
+        return;
+    end
+    
+    % 获取灰度图像数据
+    gray_img = im2double(handles.grayImageData);
+    
+    % 提取目标区域
+    target_mask = false(size(gray_img));
+    for i = 1:size(handles.extractedObjects, 1)
+        bbox = round(handles.extractedObjects(i, :));
+        target_mask(bbox(2):bbox(2)+bbox(4)-1, bbox(1):bbox(1)+bbox(3)-1) = true;
+    end
+    
+    % 应用掩码获取目标区域的灰度图像
+    target_gray_img = gray_img .* double(target_mask);
+    
+    % 直接在这里实现HOG特征提取逻辑
+    img = double(target_gray_img);
+    [h, w] = size(img);
+    img = sqrt(img); % 伽马校正
+
+    fy = [-1 0 1]; % 定义竖直模板
+    fx = fy'; % 定义水平模板
+    Iy = imfilter(img, fy, 'replicate'); % 竖直边缘
+    Ix = imfilter(img, fx, 'replicate'); % 水平边缘
+    Ied = sqrt(Ix.^2 + Iy.^2); % 边缘强度
+    Iphase = Iy ./ Ix;
+
+    step = 16; % step*step个像素作为一个单元
+    orient = 9; % 方向直方图的方向个数
+    jiao = 360 / orient; % 每个方向包含的角度数
+    Cell = cell(1, 1);
+    ii = 1;
+    jj = 1;
+    for i = 1:step:h - step + 1
+        ii = 1;
+        for j = 1:step:w - step + 1
+            tmpx = Ix(i:i + step - 1, j:j + step - 1);
+            tmped = Ied(i:i + step - 1, j:j + step - 1);
+            tmped = tmped / sum(sum(tmped)); % 局部边缘强度归一化
+            tmpphase = Iphase(i:i + step - 1, j:j + step - 1);
+            Hist = zeros(1, orient);
+            for p = 1:step
+                for q = 1:step
+                    if isnan(tmpphase(p, q)) % 0/0会得到nan，如果像素是nan，重设为0
+                        tmpphase(p, q) = 0;
+                    end
+                    ang = atan(tmpphase(p, q));
+                    ang = mod(ang * 180 / pi, 360); % 全部变正，-90变270
+                    if tmpx(p, q) < 0
+                        if ang < 90 % 如果是第一象限
+                            ang = ang + 180; % 移到第三象限
+                        end
+                        if ang > 270 % 如果是第四象限
+                            ang = ang - 180; % 移到第二象限
+                        end
+                    end
+                    ang = ang + 0.0000001;
+                    Hist(ceil(ang / jiao)) = Hist(ceil(ang / jiao)) + tmped(p, q); % 使用边缘强度加权
+                end
+            end
+            Hist = Hist / sum(Hist); % 方向直方图归一化
+            Cell{ii, jj} = Hist;
+            ii = ii + 1;
+        end
+        jj = jj + 1;
+    end
+
+    [m, n] = size(Cell);
+    feature = cell(1, (m - 1) * (n - 1));
+    for i = 1:m - 1
+        for j = 1:n - 1
+            f = [];
+            f = [f Cell{i, j}(:)' Cell{i, j + 1}(:)' Cell{i + 1, j}(:)' Cell{i + 1, j + 1}(:)'];
+            feature{(i - 1) * (n - 1) + j} = f;
+        end
+    end
+
+    l = length(feature);
+    hog_features = [];
+    for i = 1:l
+        hog_features = [hog_features; feature{i}(:)'];
+    end
+    
+    % 显示目标区域的灰度图像
+    axes(handles.axes8); % 使用指定的显示组件
+    imshow(target_gray_img);
+    title('目标区域 (灰度图像)');
+    
+    % 创建一个新的figure窗口来展示HOG特征的mesh图
+    figure;
+    mesh(hog_features);
+    title('目标区域 (HOG特征)');
+    xlabel('Block Index');
+    ylabel('Feature Vector Elements');
+    zlabel('Magnitude');
+    
+    % 打印HOG特征信息
+    disp('目标区域的HOG特征:');
+    disp(hog_features);
+    
+    % 更新handles结构体中的特征数据
+    handles.hogFeaturesTarget = hog_features;
+    guidata(hObject, handles);
