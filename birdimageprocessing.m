@@ -143,7 +143,7 @@ end
     
     % 如果图像是彩色的，转换为灰度图像
     if size(img, 3) > 1
-        img = rgb2gray(img);
+        img = my_rgb2gray(img);
     end
     
     % 在axes2上显示直方图
@@ -164,7 +164,7 @@ function pushbuttonEqualize_Callback(hObject, eventdata, handles)
     
     % 如果图像是彩色的，转换为灰度图像副本进行处理
     if size(original_img, 3) > 1
-        gray_img = rgb2gray(original_img);
+        gray_img = my_rgb2gray(original_img);
     else
         gray_img = original_img; % 如果已经是灰度图像，则直接使用
     end
@@ -209,7 +209,7 @@ function pushbuttonMatch_Callback(hObject, eventdata, handles)
         
         % 如果参考图像是彩色的，转换为灰度图像
         if size(ref_img, 3) > 1
-            ref_img = rgb2gray(ref_img);
+            ref_img = my_rgb2gray(ref_img);
         end
         
         % 保存参考图像到handles结构中，以便之后可以直接使用
@@ -246,7 +246,7 @@ function pushbutton5_Callback(hObject, eventdata, handles)
     
     % 如果图像是彩色的，转换为灰度图像副本进行处理
     if size(img, 3) > 1
-        gray_img = rgb2gray(img);
+        gray_img = my_rgb2gray(img);
     else
         gray_img = img; % 如果已经是灰度图像，则直接使用
     end
@@ -881,7 +881,7 @@ end
 
     % 确保背景图像是灰度图像
     if size(background_img, 3) == 3
-        backgroundGray = rgb2gray(background_img); % 转换为灰度图像
+        backgroundGray = my_rgb2gray(background_img); % 转换为灰度图像
     else
         backgroundGray = background_img; % 如果已经是灰度图像，则直接使用
     end
@@ -909,50 +909,6 @@ end
     % 更新handles结构体中的目标数据
     handles.targetImage = targetImage;
     guidata(hObject, handles);
-
-
-
-function lbp_img = computeLBPImage(gray_img)
-    % 默认参数：半径为1，邻居点数为8（3x3邻域）
-    radius = 1;
-    neighbors = 8;
-
-    % 获取图像尺寸
-    [rows, cols] = size(gray_img);
-
-    % 初始化LBP图像，填充NaN以处理边界情况
-    lbp_img = NaN(rows, cols);
-
-    % 遍历图像中的每个像素（除了边界）
-    for i = radius + 1:rows - radius
-        for j = radius + 1:cols - radius
-            centerPixel = gray_img(i, j);
-            code = 0;
-            for n = 0:(neighbors-1)
-                % 计算邻居的位置
-                theta = 2 * pi / neighbors * n;
-                x = i + round(radius * cos(theta));
-                y = j - round(radius * sin(theta));
-
-                % 比较中心像素与邻居像素
-                if gray_img(x, y) >= centerPixel
-                    code = bitset(code, neighbors - n);
-                end
-            end
-            lbp_img(i, j) = code;
-        end
-    end
-
-    % 处理边界（可选），这里简单地用0填充
-    lbp_img(isnan(lbp_img)) = 0;
-
-function hist = computeLBPHistogram(lbp_img)
-    % 将LBP图像转换为线性索引并计算直方图
-    bins = 2^8; % 假设我们有8个邻居，所以有256个可能的LBP值
-    hist = histcounts(double(lbp_img(:)), 0:bins);
-
-    % 归一化直方图
-    hist = hist / sum(hist);
 
 
 function pushbutton20_Callback(hObject, eventdata, handles)
@@ -986,7 +942,7 @@ function pushbutton21_Callback(hObject, eventdata, handles)
         return;
     end
     
-    target_gray_img = rgb2gray(im2double(handles.targetImage));
+    target_gray_img = my_rgb2gray(im2double(handles.targetImage));
     
     % 提取并显示目标区域的LBP特征图像
     lbp_img_target = computeLBPImage(target_gray_img);
@@ -1069,70 +1025,3 @@ function pushbutton23_Callback(hObject, eventdata, handles)
     handles.hogFeaturesTarget = hog_features;
     guidata(hObject, handles);
 
-% 辅助函数：手动实现的HOG特征提取逻辑（保持原有逻辑不变）
-function hog_features = extractHOGFeaturesManual(img)
-    [h, w] = size(img);
-    img = sqrt(img); % 伽马校正
-
-    fy = [-1 0 1]; % 定义竖直模板
-    fx = fy'; % 定义水平模板
-    Iy = imfilter(img, fy, 'replicate'); % 竖直边缘
-    Ix = imfilter(img, fx, 'replicate'); % 水平边缘
-    Ied = sqrt(Ix.^2 + Iy.^2); % 边缘强度
-    Iphase = Iy ./ Ix;
-
-    step = 16; % step*step个像素作为一个单元
-    orient = 9; % 方向直方图的方向个数
-    jiao = 360 / orient; % 每个方向包含的角度数
-    Cell = cell(1, 1);
-    ii = 1;
-    jj = 1;
-    for i = 1:step:h - step + 1
-        ii = 1;
-        for j = 1:step:w - step + 1
-            tmpx = Ix(i:i + step - 1, j:j + step - 1);
-            tmped = Ied(i:i + step - 1, j:j + step - 1);
-            tmped = tmped / sum(sum(tmped)); % 局部边缘强度归一化
-            tmpphase = Iphase(i:i + step - 1, j:j + step - 1);
-            Hist = zeros(1, orient);
-            for p = 1:step
-                for q = 1:step
-                    if isnan(tmpphase(p, q)) % 0/0会得到nan，如果像素是nan，重设为0
-                        tmpphase(p, q) = 0;
-                    end
-                    ang = atan(tmpphase(p, q));
-                    ang = mod(ang * 180 / pi, 360); % 全部变正，-90变270
-                    if tmpx(p, q) < 0
-                        if ang < 90 % 如果是第一象限
-                            ang = ang + 180; % 移到第三象限
-                        end
-                        if ang > 270 % 如果是第四象限
-                            ang = ang - 180; % 移到第二象限
-                        end
-                    end
-                    ang = ang + 0.0000001;
-                    Hist(ceil(ang / jiao)) = Hist(ceil(ang / jiao)) + tmped(p, q); % 使用边缘强度加权
-                end
-            end
-            Hist = Hist / sum(Hist); % 方向直方图归一化
-            Cell{ii, jj} = Hist;
-            ii = ii + 1;
-        end
-        jj = jj + 1;
-    end
-
-    [m, n] = size(Cell);
-    feature = cell(1, (m - 1) * (n - 1));
-    for i = 1:m - 1
-        for j = 1:n - 1
-            f = [];
-            f = [f Cell{i, j}(:)' Cell{i, j + 1}(:)' Cell{i + 1, j}(:)' Cell{i + 1, j + 1}(:)'];
-            feature{(i - 1) * (n - 1) + j} = f;
-        end
-    end
-
-    l = length(feature);
-    hog_features = [];
-    for i = 1:l
-        hog_features = [hog_features; feature{i}(:)'];
-    end
