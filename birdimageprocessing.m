@@ -270,21 +270,14 @@ function pushbutton6_Callback(hObject, eventdata, handles)
     end
     
     % 获取灰度图像数据
-    gray_img = double(handles.grayImageData); % 将图像转换为double类型以进行计算
+    gray_img = handles.grayImageData; % 不需要显式转换为double类型，由my_linear_transform处理
     
     % 定义线性变换参数（这里假设简单增强对比度）
     alpha = 1.2; % 放大系数
     beta = -20;  % 偏移量
     
     % 应用线性变换
-    linear_transformed_img = alpha * gray_img + beta;
-    
-    % 裁剪超出[0, 255]范围的值
-    linear_transformed_img(linear_transformed_img < 0) = 0;
-    linear_transformed_img(linear_transformed_img > 255) = 255;
-    
-    % 转换回uint8类型
-    linear_transformed_img = uint8(linear_transformed_img);
+    linear_transformed_img = my_linear_transform(gray_img, alpha, beta);
     
     % 在axes5上显示线性变换后的图像
     axes(handles.axes5);
@@ -296,8 +289,9 @@ function pushbutton6_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 
 
+
 % --- Executes on button press in pushbutton7.
-function pushbutton7_Callback(hObject, eventdata, handles)
+    function pushbutton7_Callback(hObject, eventdata, handles)
     % 确保有一个灰度化的图像
     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
@@ -305,11 +299,10 @@ function pushbutton7_Callback(hObject, eventdata, handles)
     end
     
     % 获取灰度图像数据
-    gray_img = double(handles.grayImageData);
+    gray_img = handles.grayImageData;
     
     % 应用对数变换
-    c = 255 / log(1 + max(gray_img(:))); % 对数变换的常数c
-    log_transformed_img = uint8(c * log(1 + gray_img));
+    log_transformed_img = my_log_transform(gray_img);
     
     % 在axes5上显示对数变换后的图像
     axes(handles.axes5);
@@ -321,8 +314,9 @@ function pushbutton7_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 
 
+
 % --- Executes on button press in pushbutton8.
-function pushbutton8_Callback(hObject, eventdata, handles)
+        function pushbutton8_Callback(hObject, eventdata, handles)
     % 确保有一个灰度化的图像
     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
@@ -330,13 +324,13 @@ function pushbutton8_Callback(hObject, eventdata, handles)
     end
     
     % 获取灰度图像数据
-    gray_img = double(handles.grayImageData);
+    gray_img = handles.grayImageData;
     
     % 定义指数变换参数
     gamma = 0.4; % 指数变换的伽马值
     
     % 应用指数变换
-    exponential_transformed_img = uint8(255 * ((gray_img / 255).^gamma));
+    exponential_transformed_img = my_exponential_transform(gray_img, gamma);
     
     % 在axes5上显示指数变换后的图像
     axes(handles.axes5);
@@ -346,6 +340,7 @@ function pushbutton8_Callback(hObject, eventdata, handles)
     % 更新handles结构体中的图像数据
     handles.exponentialTransformedImageData = exponential_transformed_img;
     guidata(hObject, handles);
+
 
 
 % --- Executes on button press in pushbutton9.
@@ -517,7 +512,6 @@ function pushbutton11_Callback(hObject, eventdata, handles)
         case '泊松噪声'
             % 泊松噪声没有额外参数
             noisy_img = imnoise(gray_img, 'poisson');
-            % 移除 break 语句
             
         otherwise
             error('未知的噪声类型');
@@ -575,7 +569,7 @@ function pushbutton11_Callback(hObject, eventdata, handles)
     msgbox(rangeHint, '参数范围提示');
 
 % --- Executes on button press in pushbutton12.
-function pushbutton12_Callback(hObject, eventdata, handles)
+    function pushbutton12_Callback(hObject, eventdata, handles)
     % 确保有一个加噪后的图像
     if ~isfield(handles, 'noisyImageData') || isempty(handles.noisyImageData)
         warndlg('请先添加噪声', '无噪声图像');
@@ -587,8 +581,8 @@ function pushbutton12_Callback(hObject, eventdata, handles)
     
     % 使用列表对话框让用户选择滤波器类型
     options = {'均值滤波', '高斯滤波', '中值滤波', '双边滤波', '自定义滤波'};
-    filterType = listdlg('PromptString', '请选择空域滤波器类型：', ...
-                         'ListString', options, ...
+    filterType = listdlg('PromptString', '请选择空域滤波器类型：',...
+                         'ListString', options,...
                          'Name', '空域滤波器类型选择');
     
     if isempty(filterType)
@@ -600,15 +594,13 @@ function pushbutton12_Callback(hObject, eventdata, handles)
     % 应用所选的空域滤波器
     switch options{filterType}
         case '均值滤波'
-            h = fspecial('average', [3 3]);
-            filtered_img = imfilter(noisy_img, h);
+            filtered_img = my_mean_filter(noisy_img, [3 3]);
         case '高斯滤波'
-            h = fspecial('gaussian', [3 3], 0.5);
-            filtered_img = imfilter(noisy_img, h);
+            filtered_img = my_gaussian_filter(noisy_img, [3 3], 0.5);
         case '中值滤波'
-            filtered_img = medfilt2(noisy_img);
+            filtered_img = my_median_filter(noisy_img);
         case '双边滤波'
-            filtered_img = imgaussfilt(noisy_img, 2); % 双边滤波器的一个近似
+            filtered_img = my_bilateral_filter(noisy_img, 1, 0.1); % 示例参数，可调整
         case '自定义滤波'
             prompt = {'请输入滤波器尺寸:', '请输入标准差:'};
             dlg_title = '自定义高斯滤波器参数';
@@ -628,8 +620,7 @@ function pushbutton12_Callback(hObject, eventdata, handles)
                 return;
             end
             
-            h = fspecial('gaussian', [size_val size_val], sigma_val);
-            filtered_img = imfilter(noisy_img, h);
+            filtered_img = my_gaussian_filter(noisy_img, [size_val size_val], sigma_val);
         otherwise
             error('未知的滤波器类型');
     end
@@ -642,9 +633,10 @@ function pushbutton12_Callback(hObject, eventdata, handles)
     % 更新handles结构体中的图像数据
     handles.filteredSpatialData = filtered_img;
     guidata(hObject, handles);
+
     
 % --- Executes on button press in pushbutton13.
-function pushbutton13_Callback(hObject, eventdata, handles)
+    function pushbutton13_Callback(hObject, eventdata, handles)
     % 确保有一个加噪后的图像
     if ~isfield(handles, 'noisyImageData') || isempty(handles.noisyImageData)
         warndlg('请先添加噪声', '无噪声图像');
@@ -657,36 +649,38 @@ function pushbutton13_Callback(hObject, eventdata, handles)
     % 计算图像的二维快速傅里叶变换
     F = fftshift(fft2(noisy_img));
     
+    % 获取频谱尺寸
+    [M, N] = size(F);
+    
     % 使用列表对话框让用户选择频域滤波器类型
     options = {'理想低通滤波', '巴特沃斯低通滤波', '高斯低通滤波'};
-    filterType = listdlg('PromptString', '请选择频域滤波器类型：', ...
-                         'ListString', options, ...
+    filterType = listdlg('PromptString', '请选择频域滤波器类型：',...
+                         'ListString', options,...
                          'Name', '频域滤波器类型选择');
     
     if isempty(filterType)
         return; % 用户取消了对话框
     end
     
-    % 创建并应用所选的频域滤波器
-    [M, N] = size(F);
-    [U, V] = meshgrid(-fix(N/2):ceil(N/2)-1, -fix(M/2):ceil(M/2)-1);
-    D = sqrt(U.^2 + V.^2);
-    cutoffFreq = 30; % 截止频率
+    % 设置截止频率（这里可以考虑后续做成可输入的形式来提高灵活性）
+    cutoffFreq = 30; 
+    % 滤波器阶数（针对巴特沃斯低通滤波，同样可考虑做成可调整形式）
+    n = 2; 
     
+    % 根据用户选择调用相应的滤波函数创建滤波器传递函数H
     switch options{filterType}
         case '理想低通滤波'
-            H = double(D <= cutoffFreq);
+            H = idealLowpassFilter(M, N, cutoffFreq);
         case '巴特沃斯低通滤波'
-            n = 2; % 滤波器阶数
-            H = 1 ./ (1 + (D / cutoffFreq).^(2*n));
+            H = butterworthLowpassFilter(M, N, cutoffFreq, n);
         case '高斯低通滤波'
-            H = exp(-(D.^2) / (2 * cutoffFreq^2));
+            H = gaussianLowpassFilter(M, N, cutoffFreq);
         otherwise
             error('未知的频域滤波器类型');
     end
     
     % 应用滤波器
-    G = F .* H;
+    G = F.* H;
     
     % 逆傅里叶变换回到空间域
     filtered_img = real(ifft2(ifftshift(G)));
@@ -699,6 +693,7 @@ function pushbutton13_Callback(hObject, eventdata, handles)
     % 更新handles结构体中的图像数据
     handles.filteredFrequencyData = filtered_img;
     guidata(hObject, handles);
+
     
 
 
