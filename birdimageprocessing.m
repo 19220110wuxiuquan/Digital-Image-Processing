@@ -22,7 +22,7 @@ function varargout = birdimageprocessing(varargin)
 
 % Edit the above text to modify the response to help birdimageprocessing
 
-% Last Modified by GUIDE v2.5 22-Dec-2024 20:40:16
+% Last Modified by GUIDE v2.5 23-Dec-2024 09:03:32
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -148,7 +148,7 @@ end
     
     % 在axes2上显示直方图
     axes(handles.axes2);
-    imhist(img);
+    my_imhist(img);
     title('灰度直方图');
 
 % --- Executes on button press in pushbuttonEqualize.
@@ -174,7 +174,7 @@ function pushbuttonEqualize_Callback(hObject, eventdata, handles)
     
     % 显示均衡化后的直方图在axes3中
     axes(handles.axes3);
-    imhist(eq_gray_img);
+    my_imhist(eq_gray_img);
     title('均衡化后的灰度直方图');
     
     % 更新handles结构体中的图像数据，以便后续操作使用
@@ -218,11 +218,11 @@ function pushbuttonMatch_Callback(hObject, eventdata, handles)
     end
     
     % 执行直方图匹配
-    matched_img = imhistmatch(src_img, ref_img); % 使用MATLAB内置的imhistmatch函数
+    matched_img = my_histmatch(src_img, ref_img); 
     
     % 显示匹配后的直方图在axes3中
     axes(handles.axes3);
-    imhist(matched_img);
+    my_imhist(matched_img);
     title('匹配后的灰度直方图');
     
     % 更新handles结构体中的图像数据
@@ -467,7 +467,7 @@ function pushbutton10_Callback(hObject, eventdata, handles)
     end
     
     % 应用旋转变换
-    rotated_img = imrotate(gray_img, -angle_degrees, 'bilinear', 'crop'); % 使用双线性插值并裁剪图像
+   rotated_img = my_imrotate(gray_img, -angle_degrees, 'method', 'bilinear', 'crop', true);
     
     % 在axes5上显示旋转变换后的图像
     axes(handles.axes5);
@@ -703,10 +703,12 @@ function pushbutton13_Callback(hObject, eventdata, handles)
 
 
 % --- Executes on button press in pushbutton14.
-function pushbutton14_Callback(hObject, eventdata, handles)
+    function pushbutton14_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton14 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+% 检查是否存在灰度图像数据，若不存在则弹出提示并返回
 if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
         return;
@@ -715,14 +717,8 @@ if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
     % 获取灰度图像数据
     gray_img = im2double(handles.grayImageData);
     
-    % 定义Roberts算子卷积核
-    robertsKernelX = [-1 0; 0 1];
-    robertsKernelY = [0 -1; 1 0];
-    
-    % 应用Roberts算子
-    g1 = imfilter(gray_img, robertsKernelX, 'replicate');
-    g2 = imfilter(gray_img, robertsKernelY, 'replicate');
-    edge_img = sqrt(g1.^2 + g2.^2);
+    % 调用自定义的Roberts算子边缘检测函数进行边缘检测
+    edge_img = my_roberts_edge_detection(gray_img);
     
     % 显示边缘检测后的图像
     axes(handles.axes6);
@@ -747,8 +743,8 @@ function pushbutton15_Callback(hObject, eventdata, handles)
     % 获取灰度图像数据
     gray_img = im2double(handles.grayImageData);
     
-    % 使用MATLAB内置函数进行Prewitt边缘检测
-    edge_img = edge(gray_img, 'prewitt');
+    % 调用自定义的Prewitt算子边缘检测函数进行边缘检测
+    edge_img = my_prewitt_edge_detection(gray_img);
     
     % 显示边缘检测后的图像
     axes(handles.axes6);
@@ -773,8 +769,8 @@ function pushbutton16_Callback(hObject, eventdata, handles)
     % 获取灰度图像数据
     gray_img = im2double(handles.grayImageData);
     
-    % 使用MATLAB内置函数进行Sobel边缘检测
-    edge_img = edge(gray_img, 'sobel');
+    % 调用自定义的Sobel算子边缘检测函数进行边缘检测
+    edge_img = my_sobel_edge_detection(gray_img);
     
     % 显示边缘检测后的图像
     axes(handles.axes6);
@@ -791,7 +787,7 @@ function pushbutton17_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
  % 确保有一个打开的灰度图像
-    if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
+   if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
         return;
     end
@@ -799,10 +795,8 @@ function pushbutton17_Callback(hObject, eventdata, handles)
     % 获取灰度图像数据
     gray_img = im2double(handles.grayImageData);
     
-    % 使用MATLAB内置函数进行拉普拉斯边缘检测
-    laplacianKernel = fspecial('laplacian', 0); % 创建拉普拉斯算子内核
-    edge_img = imfilter(gray_img, laplacianKernel); % 应用拉普拉斯算子
-    edge_img = edge_img > mean(edge_img(:)); % 二值化
+    % 调用自定义的拉普拉斯算子边缘检测函数进行边缘检测
+    edge_img = my_laplacian_edge_detection(gray_img);
     
     % 显示边缘检测后的图像
     axes(handles.axes6);
@@ -1024,4 +1018,3 @@ function pushbutton23_Callback(hObject, eventdata, handles)
     % 更新handles结构体中的特征数据
     handles.hogFeaturesTarget = hog_features;
     guidata(hObject, handles);
-
