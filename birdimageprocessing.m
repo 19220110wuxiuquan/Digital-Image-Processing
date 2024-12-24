@@ -344,7 +344,7 @@ function pushbutton6_Callback(hObject, eventdata, handles)
 
 
 % --- Executes on button press in pushbutton9.
-function pushbutton9_Callback(hObject, eventdata, handles)
+            function pushbutton9_Callback(hObject, eventdata, handles)
     % 确保有一个灰度化的图像
     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
         warndlg('请先将图像灰度化', '无灰度图像');
@@ -385,41 +385,15 @@ function pushbutton9_Callback(hObject, eventdata, handles)
     % 创建一个新的空白图像
     scaled_img = zeros(new_m, new_n);
     
-    % 计算每个新像素的值（双线性插值）
+    % 计算每个新像素的值（调用双线性插值函数）
     for i = 1:new_m
         for j = 1:new_n
             % 计算在原图像中的坐标
-            x = (j - 0.5) / scale_factor_x - 0.5;
-            y = (i - 0.5) / scale_factor_y - 0.5;
+            x = (j - 0.5) / scale_factor_x + 0.5;
+            y = (i - 0.5) / scale_factor_y + 0.5;
             
-            % 向上取整和向下取整
-            x1 = floor(x); % 向下
-            x2 = ceil(x);  % 向上
-            y1 = floor(y);
-            y2 = ceil(y);
-            
-            % 确保不超出图像边界
-            x1 = max(1, min(x1, n-1));
-            x2 = max(1, min(x2, n-1));
-            y1 = max(1, min(y1, m-1));
-            y2 = max(1, min(y2, m-1));
-            
-            % 双线性插值计算
-            if x2 == x1 && y2 == y1
-                value = gray_img(y1+1, x1+1);
-            else
-                Q11 = gray_img(y1+1, x1+1);
-                Q21 = gray_img(y2+1, x1+1);
-                Q12 = gray_img(y1+1, x2+1);
-                Q22 = gray_img(y2+1, x2+1);
-                
-                value = (Q11 * (x2-x) * (y2-y) + ...
-                         Q21 * (x-x1) * (y2-y) + ...
-                         Q12 * (x2-x) * (y-y1) + ...
-                         Q22 * (x-x1) * (y-y1));
-            end
-            
-            scaled_img(i, j) = value;
+            % 应用双线性插值
+            scaled_img(i, j) = bilinear_interpolation(gray_img, x, y);
         end
     end
     
@@ -475,10 +449,9 @@ function pushbutton10_Callback(hObject, eventdata, handles)
 
 
 % --- Executes on button press in pushbutton11.
-function pushbutton11_Callback(hObject, eventdata, handles)
+   function pushbutton11_Callback(hObject, eventdata, handles)
     % 确保有一个打开的灰度图像
     if ~isfield(handles, 'grayImageData') || isempty(handles.grayImageData)
-        warndlg('请先将图像灰度化', '无灰度图像');
         return;
     end
     
@@ -495,78 +468,94 @@ function pushbutton11_Callback(hObject, eventdata, handles)
         return; % 用户取消了对话框
     end
     
-    % 定义每个噪声类型的参数和默认值
+    % 定义每个噪声类型的参数、默认值
     switch options{noiseType}
         case '椒盐噪声'
             prompt = {'请输入密度 (0-1)：'};
-            dlgtitle = '椒盐噪声参数';
             definput = {'0.05'};
-            rangeHint = '密度范围为0到1之间';
             
         case '高斯噪声'
             prompt = {'请输入均值：', '请输入方差 (0-1)：'};
-            dlgtitle = '高斯噪声参数';
             definput = {'0', '0.01'};
-            rangeHint = '均值可以是任意实数，方差范围为0到1之间';
             
         case '泊松噪声'
-            % 泊松噪声没有额外参数
-            noisy_img = imnoise(gray_img, 'poisson');
+            [height, width] = size(gray_img);
+            noisy_img = zeros(size(gray_img));
+            for y = 1:height
+                for x = 1:width
+                    lambda = gray_img(y, x) * 255; % 将归一化的灰度值转换回0-255区间
+                    noisy_img(y, x) = max(0, poissrnd(lambda)) / 255; % 再次归一化到[0, 1]
+                end
+            end
+            axes(handles.axes5);
+            imshow(noisy_img);
+            title(['加噪后的图像 (' options{noiseType} ')']);
+            handles.noisyImageData = noisy_img;
+            guidata(hObject, handles);
+            return;
             
         otherwise
-            error('未知的噪声类型');
+            return;
     end
 
-    % 如果不是泊松噪声，则获取用户输入的参数
-    if ~strcmp(options{noiseType}, '泊松噪声')
-        userInputs = inputdlg(prompt, dlgtitle, 1, definput);
-        if isempty(userInputs)
-            return; % 用户取消了对话框
-        end
-        
-        % 将输入转换为数值并应用噪声
-        params = cellfun(@str2double, userInputs, 'UniformOutput', false);
-        if any(cellfun(@isnan, params))
-            warndlg('请输入有效的数字参数', '无效输入');
-            return;
-        end
-        
-        try
-            switch options{noiseType}
-                case '椒盐噪声'
-                    density = params{1};
-                    if density < 0 || density > 1
-                        warndlg('密度应在0到1之间', '参数超出范围');
-                        return;
-                    end
-                    noisy_img = imnoise(gray_img, 'salt & pepper', density);
-                    
-                case '高斯噪声'
-                    mean_val = params{1};
-                    variance = params{2};
-                    if variance < 0 || variance > 1
-                        warndlg('方差应在0到1之间', '参数超出范围');
-                        return;
-                    end
-                    noisy_img = imnoise(gray_img, 'gaussian', mean_val, variance);
-            end
-        catch ME
-            warndlg(['发生错误: ' ME.message], '添加噪声失败');
-            return;
-        end
+    % 获取用户输入的参数
+    userInputs = inputdlg(prompt, ['噪声参数 - ' options{noiseType}], 1, definput);
+    if isempty(userInputs)
+        return; % 用户取消了对话框
     end
     
-    % 显示加噪后的图像
-    axes(handles.axes5);
-    imshow(noisy_img);
-    title(['加噪后的图像 (' options{noiseType} ')']);
+    % 将输入转换为数值并验证
+    params = cellfun(@str2double, userInputs, 'UniformOutput', false);
+    if any(cellfun(@isnan, params))
+        return;
+    end
     
-    % 更新handles结构体中的图像数据
-    handles.noisyImageData = noisy_img;
-    guidata(hObject, handles);
-
-    % 提示参数范围
-    msgbox(rangeHint, '参数范围提示');
+    try
+        switch options{noiseType}
+            case '椒盐噪声'
+                density = params{1};
+                if density < 0 || density > 1
+                    return;
+                end
+                [height, width] = size(gray_img);
+                numPixels = height * width;
+                numNoisePixels = round(numPixels * density);
+                noisy_img = gray_img;
+                noisePixelIndices = randperm(numPixels, numNoisePixels);
+                numSaltPixels = floor(numNoisePixels / 2);
+                numPepperPixels = numNoisePixels - numSaltPixels;
+                saltPixelIndices = noisePixelIndices(1:numSaltPixels);
+                pepperPixelIndices = noisePixelIndices(numSaltPixels + 1:end);
+                [ySalt, xSalt] = ind2sub([height, width], saltPixelIndices);
+                noisy_img(sub2ind(size(gray_img), ySalt, xSalt)) = 1;
+                [yPepper, xPepper] = ind2sub([height, width], pepperPixelIndices);
+                noisy_img(sub2ind(size(gray_img), yPepper, xPepper)) = 0;
+                
+            case '高斯噪声'
+                mean_val = params{1};
+                variance = params{2};
+                if variance < 0 || variance > 1
+                    return;
+                end
+                [height, width] = size(gray_img);
+                noiseMatrix = mean_val + sqrt(variance) * randn(height, width);
+                clippedNoiseMatrix = max(0, min(1, noiseMatrix));
+                noisy_img = max(0, min(1, gray_img + clippedNoiseMatrix));
+        end
+        
+        % 显示加噪后的图像
+        axes(handles.axes5);
+        imshow(noisy_img);
+        title(['加噪后的图像 (' options{noiseType} ')']);
+        
+        % 更新handles结构体中的图像数据
+        handles.noisyImageData = noisy_img;
+        guidata(hObject, handles);
+        
+    catch ME
+        % 捕获异常但不显示警告
+        return;
+    end
 
 % --- Executes on button press in pushbutton12.
     function pushbutton12_Callback(hObject, eventdata, handles)
@@ -636,7 +625,7 @@ function pushbutton11_Callback(hObject, eventdata, handles)
 
     
 % --- Executes on button press in pushbutton13.
-    function pushbutton13_Callback(hObject, eventdata, handles)
+   function pushbutton13_Callback(hObject, eventdata, handles)
     % 确保有一个加噪后的图像
     if ~isfield(handles, 'noisyImageData') || isempty(handles.noisyImageData)
         warndlg('请先添加噪声', '无噪声图像');
@@ -653,7 +642,8 @@ function pushbutton11_Callback(hObject, eventdata, handles)
     [M, N] = size(F);
     
     % 使用列表对话框让用户选择频域滤波器类型
-    options = {'理想低通滤波', '巴特沃斯低通滤波', '高斯低通滤波'};
+    options = {'理想低通滤波', '巴特沃斯低通滤波', '高斯低通滤波', ...
+               '理想高通滤波', '巴特沃斯高通滤波', '高斯高通滤波'};
     filterType = listdlg('PromptString', '请选择频域滤波器类型：',...
                          'ListString', options,...
                          'Name', '频域滤波器类型选择');
@@ -664,7 +654,7 @@ function pushbutton11_Callback(hObject, eventdata, handles)
     
     % 设置截止频率（这里可以考虑后续做成可输入的形式来提高灵活性）
     cutoffFreq = 30; 
-    % 滤波器阶数（针对巴特沃斯低通滤波，同样可考虑做成可调整形式）
+    % 滤波器阶数
     n = 2; 
     
     % 根据用户选择调用相应的滤波函数创建滤波器传递函数H
@@ -675,12 +665,18 @@ function pushbutton11_Callback(hObject, eventdata, handles)
             H = butterworthLowpassFilter(M, N, cutoffFreq, n);
         case '高斯低通滤波'
             H = gaussianLowpassFilter(M, N, cutoffFreq);
+        case '理想高通滤波'
+            H = idealHighpassFilter(M, N, cutoffFreq);
+        case '巴特沃斯高通滤波'
+            H = butterworthHighpassFilter(M, N, cutoffFreq, n);
+        case '高斯高通滤波'
+            H = gaussianHighpassFilter(M, N, cutoffFreq);
         otherwise
             error('未知的频域滤波器类型');
     end
     
     % 应用滤波器
-    G = F.* H;
+    G = F .* H;
     
     % 逆傅里叶变换回到空间域
     filtered_img = real(ifft2(ifftshift(G)));
@@ -695,7 +691,6 @@ function pushbutton11_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 
     
-
 
 % --- Executes on button press in pushbutton14.
     function pushbutton14_Callback(hObject, eventdata, handles)
