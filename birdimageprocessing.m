@@ -170,7 +170,7 @@ function pushbuttonEqualize_Callback(hObject, eventdata, handles)
     end
     
     % 执行直方图均衡化
-    eq_gray_img = histeq(gray_img);
+    eq_gray_img = my_histeq(gray_img);
     
     % 显示均衡化后的直方图在axes3中
     axes(handles.axes3);
